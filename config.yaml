@@ -1,0 +1,54 @@
+# ============================================================
+#  Dry Etching Defect DOE 분석 설정 파일
+#  데이터 경로와 인자 수준만 바꾸면 전체 파이프라인이 그대로 재실행됩니다.
+# ============================================================
+
+seed: 42                       # 참고용 데이터 생성 시드 (재현성)
+
+# 응답변수(불량 지표) 정의 — SEM 프로파일 기반 0~10 등급, 낮을수록 양호
+responses:
+  tapered: Tapered_Y1          # 측벽 기울어짐 정도
+  notching: Notching_Y2        # 하부 측벽 파임 정도
+score:
+  name: Score                  # 통합 불량 점수 (낮을수록 양호)
+  weights: {Tapered_Y1: 1.0, Notching_Y2: 1.0}
+
+# 현 공정 조건
+baseline:
+  CHF3_ratio: 0.0              # CF4 단독
+  Pressure: 100                # mTorr
+  Bias: 50                     # W
+
+# ---------------- 1차 DOE: 3인자 3수준 완전요인 (27 runs) ----------------
+doe1:
+  data: data/doe1_raw.csv
+  factors:
+    Gas:                       # 범주형 라벨 -> CHF3 비율(연속값) 매핑
+      levels: {CF4: 0.0, Mix1: 0.2, Mix2: 0.3}   # Mix1 = CF4:CHF3 8:2, Mix2 = 7:3
+    Pressure: {levels: [70, 100, 130]}           # mTorr
+    Bias:     {levels: [30, 50, 70]}             # W
+  alpha: 0.05                  # 유의수준
+
+# ---------------- 2차 DOE: 2인자 CCD (RSM) ----------------
+# 1차에서 Bias가 유의하지 않으면 아래 값으로 고정하고 Gas 비율·Pressure만 최적화
+doe2:
+  data: data/doe2_raw.csv
+  bias_fixed: 30               # W
+  center:  {CHF3_ratio: 0.20, Pressure: 70}     # 코드값 0 (1차 후보: Mix1, 70 mTorr)
+  step:    {CHF3_ratio: 0.07, Pressure: 20}     # 코드값 ±1 에 해당하는 실제 간격
+  n_center: 5                  # 중심점 반복 (순수오차 추정용)
+  alpha_axial: 1.414           # 회전형 CCD 축점 거리
+
+# ---------------- 확인 실험 / 공정능력 ----------------
+confirmation:
+  data: data/confirm_raw.csv
+  n_runs: 5
+  USL: 9.5                     # Score 상한 규격 (현 공정 수준)
+  target_cpk: 1.33             # 4-sigma 양산 최소 기준
+
+# ---------------- Robust design 점검 범위 (phase 2) ----------------
+robust:
+  CHF3_ratio_delta: 0.015      # ±1.5%p
+  Pressure_delta: 2.5          # ±2.5 mTorr
+
+output_dir: outputs
